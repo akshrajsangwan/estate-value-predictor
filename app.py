@@ -1,7 +1,8 @@
 import streamlit as st
 import pandas as pd
-import joblib
-from custom_transformers import *
+import requests
+
+API_URL = "http://127.0.0.1:8000/predict"
 
 # -----------------------------
 # Page Config
@@ -11,15 +12,6 @@ st.set_page_config(
     page_icon="🏠",
     layout="wide"
 )
-
-# -----------------------------
-# Load Model
-# -----------------------------
-@st.cache_resource
-def load_model():
-    return joblib.load("EstateValuePredictor.pkl")
-
-model = load_model()
 
 # -----------------------------
 # Title
@@ -129,31 +121,36 @@ ocean_proximity = st.selectbox(
 # -----------------------------
 if st.button("Predict House Price", use_container_width=True):
 
-    input_data = pd.DataFrame({
-        "longitude": [longitude],
-        "latitude": [latitude],
-        "housing_median_age": [housing_median_age],
-        "total_rooms": [total_rooms],
-        "total_bedrooms": [total_bedrooms],
-        "population": [population],
-        "households": [households],
-        "median_income": [median_income],
-        "ocean_proximity": [ocean_proximity]
-    })
-
     try:
-        prediction = model.predict(input_data)
+        with st.spinner("Calculating estimated value..."):
+            response = requests.post(API_URL, json={
+                "latitude": latitude,
+                "longitude": longitude,
+                "housing_median_age": housing_median_age,
+                "total_rooms": total_rooms,
+                "total_bedrooms": total_bedrooms,
+                "population": population,
+                "households": households,
+                "median_income": median_income,
+                "ocean_proximity": ocean_proximity
+            })
 
-        st.success("Prediction Successful ✅")
+        if response.status_code == 200:
+            data = response.json()
 
-        st.subheader("🏡 Estimated House Value")
+            prediction = data["median_house_value"]
+            
+            st.success("prediction successful")
+            st.subheader("🏡 Estimated House Value")
+            st.metric(
+                label="Predicted Price",
+                value=f"${prediction:,.2f}"
+            )
 
-        st.metric(
-            label="Predicted Price",
-            value=f"${prediction[0]:,.2f}"
-        )
+            st.balloons()
 
-        st.balloons()
+        else:
+            st.error(f"API Error: {response.text}")
 
     except Exception as e:
         st.error(f"Error: {e}")
